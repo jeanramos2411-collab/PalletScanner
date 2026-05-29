@@ -9,6 +9,10 @@ data class PalletInfoResponse(
     val lotes: List<LoteInfo>,
     @SerializedName("EstadoValidacion")
     val estadoValidacion: String,
+    @SerializedName("LotesReales")
+    val lotesReales: Int = 0,
+    @SerializedName("TiposDeEtiqueta")
+    val tiposDeEtiqueta: Int = 0,
     @SerializedName("Incompleto")
     val incompleto: Boolean = false,
     @SerializedName("Mensaje")

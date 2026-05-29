@@ -303,12 +303,16 @@ fun TesteadorScreen(
                         }
                     }
 
-                    // Titulo de lotes
+                    // Titulo de lotes y tipos de etiqueta
                     if (response.lotes.isNotEmpty()) {
                         item {
                             Spacer(modifier = Modifier.height(4.dp))
+                            val lotesReales = if (response.lotesReales > 0) response.lotesReales
+                                else response.lotes.map { it.codigoCuartel }.distinct().size
+                            val tiposEtiqueta = if (response.tiposDeEtiqueta > 0) response.tiposDeEtiqueta
+                                else response.lotes.size
                             Text(
-                                text = "Lotes (${response.lotes.size})",
+                                text = "Lotes ($lotesReales) - Tipos de Etiqueta ($tiposEtiqueta)",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold
                             )
