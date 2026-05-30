@@ -21,7 +21,8 @@ fun PalletEditDialog(
     pallet: Pallet,
     onSave: (Pallet) -> Unit,
     onDismiss: () -> Unit,
-    viewModel: MainViewModel
+    viewModel: MainViewModel,
+    isSaving: Boolean = false
 ) {
     // Estados locales para edición - CAMPOS ORIGINALES
     var variedad by remember { mutableStateOf(pallet.variedad) }
@@ -272,13 +273,26 @@ fun PalletEditDialog(
                     ) {
                         OutlinedButton(
                             onClick = onDismiss,
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.weight(1f),
+                            enabled = !isSaving
                         ) {
                             Text("Cancelar")
                         }
 
                         Button(
                             onClick = {
+
+                                // 🔥 SOLO ESTAS 3 LÍNEAS NUEVAS
+                                val sinCambios = variedad == pallet.variedad &&
+                                        calibre == pallet.calibre &&
+                                        embalaje == pallet.embalaje &&
+                                        numeroDeCajas == pallet.numeroDeCajas.toString()
+
+                                if (sinCambios) {
+                                    onDismiss()  // Cerrar sin guardar
+                                    return@Button
+                                }
+
                                 val editedPallet = if (isBicolor) {
                                     // Para pallets bicolor E50G6CB
                                     pallet.copy(
@@ -302,9 +316,18 @@ fun PalletEditDialog(
                                 }
                                 onSave(editedPallet)
                             },
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.weight(1f),
+                            enabled = !isSaving
                         ) {
-                            Text("Guardar")
+                            if (isSaving) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(22.dp),
+                                    strokeWidth = 2.dp,
+                                    color = MaterialTheme.colorScheme.onPrimary
+                                )
+                            } else {
+                                Text("Guardar")
+                            }
                         }
                     }
                 }

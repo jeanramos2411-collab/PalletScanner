@@ -683,6 +683,10 @@ class SignalRService {
         _palletProcessed.value = null
         _palletError.value = null
     }
+
+    fun clearPalletError() {
+        _palletError.value = null
+    }
     // Agregar después del método clearStates()
     fun clearSuccessMessage() {
         _successMessage.value = null

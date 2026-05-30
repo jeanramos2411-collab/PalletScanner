@@ -54,6 +54,20 @@ class MainViewModel(
 
     private val _infoDialogMessage = MutableStateFlow<String?>(null)
     val infoDialogMessage: StateFlow<String?> = _infoDialogMessage.asStateFlow()
+
+    // Diálogo de error del servidor (validación embalaje, escaneo, edición)
+    private val _showErrorDialog = MutableStateFlow(false)
+    val showErrorDialog: StateFlow<Boolean> = _showErrorDialog.asStateFlow()
+
+    private val _errorDialogMessage = MutableStateFlow<String?>(null)
+    val errorDialogMessage: StateFlow<String?> = _errorDialogMessage.asStateFlow()
+
+    /** Pallet en espera de respuesta del escritorio tras guardar edición */
+    private val _pendingEditPalletNumber = MutableStateFlow<String?>(null)
+
+    private val _isSavingEdits = MutableStateFlow(false)
+    val isSavingEdits: StateFlow<Boolean> = _isSavingEdits.asStateFlow()
+
     companion object {
         private const val TAG = "MainViewModel"
         // ELIMINADO: private const val BICOLOR_EMBALAJE = "E50G6CB" - Ya no hardcodeamos
@@ -102,10 +116,34 @@ class MainViewModel(
                 }
             }
         }
+
+        // Errores del escritorio (PalletError): embalaje, escaneo, edición
+        viewModelScope.launch {
+            palletError.collect { message ->
+                message?.let {
+                    Log.e(TAG, "❌ Error del servidor: $it")
+                    _pendingEditPalletNumber.value = null
+                    _isSavingEdits.value = false
+                    dismissEditDialog()
+                    _errorDialogMessage.value = it
+                    _showErrorDialog.value = true
+                }
+            }
+        }
+
         // NUEVO: Observar lista sincronizada del escritorio
         viewModelScope.launch {
             scannedPallets.collect { pallets ->
                 Log.d(TAG, "📋 Lista sincronizada actualizada - Count: ${pallets.size}")
+
+                // Cerrar diálogo de edición si el escritorio confirmó la actualización
+                val pendingEdit = _pendingEditPalletNumber.value
+                if (pendingEdit != null && pallets.any { it.numeroPallet == pendingEdit }) {
+                    Log.d(TAG, "✅ Edición confirmada por lista sincronizada: $pendingEdit")
+                    _pendingEditPalletNumber.value = null
+                    _isSavingEdits.value = false
+                    dismissEditDialog()
+                }
 
                 // NUEVO: Contar pallets bicolor para estadísticas usando detección dinámica
                 val bicolorCount = pallets.count { pallet ->
@@ -193,27 +231,36 @@ class MainViewModel(
     fun dismissEditDialog() {
         _showEditDialog.value = false
         _palletToEdit.value = null
-        _showBicolorFields.value = false // NUEVO: Ocultar campos bicolor
+        _showBicolorFields.value = false
+        _pendingEditPalletNumber.value = null
+        _isSavingEdits.value = false
         Log.d(TAG, "❌ Dialog de edición cerrado")
     }
 
-    // NUEVO: Método para validar datos de pallet bicolor antes de guardar (ACTUALIZADO)
-    private fun validateBicolorPallet(pallet: Pallet): Boolean {
-        // CAMBIO: Usar detección dinámica en lugar de hardcodeada
-        if (!bicolorPackagingService.isBicolorPackaging(pallet.embalaje)) return true // No es bicolor, validación normal
+    // Validación local bicolor (antes de enviar al escritorio)
+    private fun validateBicolorPallet(pallet: Pallet): String? {
+        if (!bicolorPackagingService.isBicolorPackaging(pallet.embalaje)) return null
 
-        // Validar que tenga segunda variedad y cajas para ambas variedades
         if (pallet.segundaVariedad.isNullOrBlank()) {
-            Log.w(TAG, "⚠️ Pallet bicolor sin segunda variedad")
-            return false
+            return "El pallet bicolor debe tener una segunda variedad."
         }
 
         if (pallet.numeroDeCajas <= 0 || pallet.cajasSegundaVariedad <= 0) {
-            Log.w(TAG, "⚠️ Pallet bicolor con cantidades de cajas inválidas")
-            return false
+            return "El pallet bicolor debe tener cantidad de cajas mayor que cero en ambas variedades."
         }
 
-        return true
+        return null
+    }
+
+    private fun showLocalError(message: String) {
+        _errorDialogMessage.value = message
+        _showErrorDialog.value = true
+    }
+
+    fun dismissErrorDialog() {
+        _showErrorDialog.value = false
+        _errorDialogMessage.value = null
+        signalRService.clearPalletError()
     }
 
     // Método para guardar pallet editado (ACTUALIZADO para bicolor dinámico)
@@ -221,24 +268,29 @@ class MainViewModel(
         viewModelScope.launch {
             Log.d(TAG, "💾 Guardando ediciones del pallet: ${editedPallet.numeroPallet}")
 
-            // NUEVO: Validar datos bicolor antes de enviar
-            if (!validateBicolorPallet(editedPallet)) {
-                Log.e(TAG, "❌ Validación de pallet bicolor falló")
+            validateBicolorPallet(editedPallet)?.let { localError ->
+                Log.e(TAG, "❌ Validación local bicolor: $localError")
+                showLocalError(localError)
                 return@launch
             }
 
-            // CAMBIO: Usar detección dinámica para logging
             if (bicolorPackagingService.isBicolorPackaging(editedPallet.embalaje)) {
                 Log.d(TAG, "🎨 Guardando pallet bicolor - Variedad 1: ${editedPallet.variedad} (${editedPallet.numeroDeCajas}), Variedad 2: ${editedPallet.segundaVariedad} (${editedPallet.cajasSegundaVariedad})")
             }
 
+            _isSavingEdits.value = true
+            _pendingEditPalletNumber.value = editedPallet.numeroPallet
+
             val sent = signalRService.sendPalletWithEdits(editedPallet)
             if (sent) {
-                Log.d(TAG, "✅ Ediciones enviadas exitosamente")
-                dismissEditDialog()
-                // NOTA: La lista se actualizará automáticamente via PalletListUpdated
+                Log.d(TAG, "✅ Ediciones enviadas; esperando respuesta del escritorio...")
             } else {
                 Log.w(TAG, "⚠️ No se pudieron enviar las ediciones - Sin conexión")
+                _pendingEditPalletNumber.value = null
+                _isSavingEdits.value = false
+                showLocalError(
+                    "Sin conexión con el servidor de despacho.\nVerifique la red y la configuración SignalR."
+                )
             }
         }
     }

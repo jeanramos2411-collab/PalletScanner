@@ -42,6 +42,7 @@ fun PalletListScreen(
     // ✅ NUEVO: Observar mensajes informativos de pallets PC
     val showInfoDialog by viewModel.showInfoDialog.collectAsState()
     val infoDialogMessage by viewModel.infoDialogMessage.collectAsState()
+    val isSavingEdits by viewModel.isSavingEdits.collectAsState()
 
     Scaffold(
         topBar = {
@@ -139,11 +140,14 @@ fun PalletListScreen(
             PalletEditDialog(
                 pallet = palletToEdit!!,
                 viewModel = viewModel,
+                isSaving = isSavingEdits,
                 onSave = { editedPallet ->
                     viewModel.savePalletEdits(editedPallet)
                 },
                 onDismiss = {
-                    viewModel.dismissEditDialog()
+                    if (!isSavingEdits) {
+                        viewModel.dismissEditDialog()
+                    }
                 }
             )
         }

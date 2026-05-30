@@ -5,6 +5,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.despacho.palletscanner.ui.screens.*
+import com.despacho.palletscanner.ui.components.PalletErrorDialog
 import com.despacho.palletscanner.viewmodels.MainViewModel
 import com.despacho.palletscanner.viewmodels.TesteadorViewModel
 import com.despacho.palletscanner.data.models.ServerConfiguration
@@ -28,6 +29,17 @@ fun Navigation(
 
     // Determinar pantalla inicial basada en configuracion
     val startDestination = if (serverConfig.isValid()) "module_selector" else "configuration"
+
+    // Errores del escritorio visibles en todo el módulo Despacho (escaneo, lista, edición)
+    val showErrorDialog by viewModel.showErrorDialog.collectAsState()
+    val errorDialogMessage by viewModel.errorDialogMessage.collectAsState()
+
+    if (showErrorDialog && errorDialogMessage != null) {
+        PalletErrorDialog(
+            message = errorDialogMessage!!,
+            onDismiss = { viewModel.dismissErrorDialog() }
+        )
+    }
 
     NavHost(
         navController = navController,

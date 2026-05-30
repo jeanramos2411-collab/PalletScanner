@@ -26,7 +26,6 @@ fun MainScreen(
     val connectionState by viewModel.connectionState.collectAsState()
     val activeTrip by viewModel.activeTrip.collectAsState()
     val palletProcessed by viewModel.palletProcessed.collectAsState()
-    val palletError by viewModel.palletError.collectAsState()
     val scannedPallets by viewModel.scannedPallets.collectAsState()
 
     // NUEVOS StateFlows para el dialog de edición
@@ -166,21 +165,7 @@ fun MainScreen(
                 }
             }
 
-            // Mostrar errores si los hay
-            palletError?.let { error ->
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.errorContainer
-                    )
-                ) {
-                    Text(
-                        text = "Error: $error",
-                        modifier = Modifier.padding(16.dp),
-                        color = MaterialTheme.colorScheme.onErrorContainer
-                    )
-                }
-            }
+            // Los errores del servidor se muestran en PalletErrorDialog (Navigation)
 
             // NUEVO: Mostrar notificaciones de éxito (viaje finalizado, etc.)
             successMessage?.let { message ->
@@ -236,15 +221,20 @@ fun MainScreen(
         }
 
         // Dialog de edición de pallet
+        val isSavingEdits by viewModel.isSavingEdits.collectAsState()
+
         if (showEditDialog && palletToEdit != null) {
             PalletEditDialog(
                 pallet = palletToEdit!!,
                 viewModel = viewModel,
+                isSaving = isSavingEdits,
                 onSave = { editedPallet ->
                     viewModel.savePalletEdits(editedPallet)
                 },
                 onDismiss = {
-                    viewModel.dismissEditDialog()
+                    if (!isSavingEdits) {
+                        viewModel.dismissEditDialog()
+                    }
                 }
             )
         }
